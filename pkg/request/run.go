@@ -86,6 +86,7 @@ func (tr *TemplateRequest) URLTemplate() *template.Template {
 
 type RequestContext struct {
 	Host      string
+	Iteration int
 	Page      int
 	PageSize  int
 	AuthToken string
@@ -161,8 +162,9 @@ func (tr *TemplateRequest) ShouldContinue(body []byte) bool {
 }
 
 func (tr *TemplateRequest) Recurse(c *RequestContext, handleResponse func(body []byte)) {
-	for reqCount := 1; reqCount <= 50; reqCount++ {
-		c.Page = reqCount
+	for reqCount := 0; reqCount <= 50; reqCount++ {
+		c.Page = reqCount - 1
+		c.Iteration = reqCount
 		c.PageSize = 50
 
 		req, err := tr.NewRequest(c)
