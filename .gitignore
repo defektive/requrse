@@ -1,0 +1,11 @@
+*.env
+static/*
+.idea
+
+
+.hugo/public
+.hugo/resources/
+.hugo_build.lock
+dist/
+
+.hugo

@@ -1,0 +1,9 @@
+name: example
+url: http://{{ .Host }}/l/api/v1/inspect.json
+method: POST
+headers:
+  authorization: Token {{ .AuthToken }}
+  content-type: text/json
+body: '{"version":"v1","page": {{.Page}} ,"pageSize":{{.PageSize}} ,"query":[{"label":"my-label","select":true,"primary":true,"provider":"my-provider","includes":[]}'
+stop_when:
+  - 'select(.Body | contains(": 10 ,")) | .'
