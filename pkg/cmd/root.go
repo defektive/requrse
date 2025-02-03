@@ -46,6 +46,9 @@ var rootCmd = &cobra.Command{
 		c := &request.RequestContext{
 			Host:      "localhost",
 			AuthToken: "pizza",
+			Extra: map[string]interface{}{
+				"garbage": 10,
+			},
 		}
 
 		req.Recurse(c, func(body []byte) {

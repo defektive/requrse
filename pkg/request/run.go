@@ -89,6 +89,7 @@ type RequestContext struct {
 	Page      int
 	PageSize  int
 	AuthToken string
+	Extra     map[string]interface{}
 }
 
 func (tr *TemplateRequest) NewRequest(c *RequestContext) (*http.Request, error) {
