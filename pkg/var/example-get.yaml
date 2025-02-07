@@ -1,0 +1,7 @@
+name: Xodbox GET Example
+url: http://{{ .Host }}/l/api/v1/inspect.json?page={{.Page}}
+method: GET
+headers:
+  authorization: Token {{ .AuthToken }}
+stop_when:
+  - 'select(.request.query.page[0] == "10") | .'

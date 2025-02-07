@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -124,20 +125,48 @@ func (tr *TemplateRequest) NewRequest(c *RequestContext) (*http.Request, error) 
 	return req, nil
 }
 
-func (tr *TemplateRequest) ShouldContinue(body []byte) bool {
+func (tr *TemplateRequest) ShouldContinue(resp *http.Response, body []byte) bool {
 	if tr.StopWhen == nil || len(tr.StopWhen) == 0 {
 		// no conditions. do not continue
 		return false
 	}
-	r := map[string]any{}
-	err := json.Unmarshal(body, &r)
+
+	sr := SimpleResponse{
+		Request: SimpleRequest{
+			Path:  resp.Request.URL.Path,
+			Query: resp.Request.URL.Query(),
+		},
+		Status:      resp.StatusCode,
+		RawBody:     string(body),
+		ContentType: resp.Header.Get("Content-Type"),
+		Headers:     resp.Header,
+	}
+
+	maybe := map[string]any{}
+	json.Unmarshal(body, &maybe)
+
+	maybeNot := []map[string]any{}
+	json.Unmarshal(body, &maybeNot)
+
+	sr.BodyObject = maybe
+	sr.BodyArray = maybeNot
+
+	jsonM, err := json.Marshal(sr)
 	if err != nil {
+		log.Println("error marshalling json of simple request", err)
+		panic(err)
+	}
+	r := map[string]any{}
+	err = json.Unmarshal(jsonM, &r)
+	if err != nil {
+		log.Println("error unmarshalling json of simple request", err)
 		panic(err)
 	}
 
 	for _, condition := range tr.StopWhen {
 		query, err := gojq.Parse(condition)
 		if err != nil {
+			log.Println(err)
 			panic(err)
 		}
 
@@ -151,9 +180,13 @@ func (tr *TemplateRequest) ShouldContinue(body []byte) bool {
 				if err, ok := err.(*gojq.HaltError); ok && err.Value() == nil {
 					break
 				}
-				log.Fatalln(err)
+
+				log.Println(err)
 			}
-			return false
+
+			if v != nil {
+				return false
+			}
 		}
 	}
 
@@ -161,9 +194,24 @@ func (tr *TemplateRequest) ShouldContinue(body []byte) bool {
 	return true
 }
 
+type SimpleRequest struct {
+	Path  string     `json:"path"`
+	Query url.Values `json:"query"`
+}
+
+type SimpleResponse struct {
+	Request     SimpleRequest       `json:"request"`
+	Status      int                 `json:"status"`
+	RawBody     string              `json:"raw_body"`
+	BodyObject  any                 `json:"body_object"`
+	BodyArray   any                 `json:"body_array"`
+	ContentType string              `json:"content_type"`
+	Headers     map[string][]string `json:"headers"`
+}
+
 func (tr *TemplateRequest) Recurse(c *RequestContext, handleResponse func(body []byte)) {
 	for reqCount := 0; true; reqCount++ {
-		c.Page = reqCount - 1
+		c.Page = reqCount + 1
 		c.Iteration = reqCount
 		c.PageSize = 50
 
@@ -184,7 +232,8 @@ func (tr *TemplateRequest) Recurse(c *RequestContext, handleResponse func(body [
 		}
 
 		handleResponse(body)
-		if !tr.ShouldContinue(body) {
+
+		if !tr.ShouldContinue(resp, body) {
 			return
 		}
 	}

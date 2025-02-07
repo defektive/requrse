@@ -37,7 +37,7 @@ var rootCmd = &cobra.Command{
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
-		example := filepath.Join("pkg", "var", "example.yaml")
+		example := filepath.Join("pkg", "var", "example-post.yaml")
 		req, err := request.FromFile(example)
 		if err != nil {
 			panic(err)

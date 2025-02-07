@@ -1,4 +1,4 @@
-name: example
+name: Xodbox POST Example
 url: http://{{ .Host }}/l/api/v1/inspect.json
 method: POST
 headers:
@@ -6,4 +6,4 @@ headers:
   content-type: text/json
 body: '{"version":"v1","page": {{.Page}} ,"pageSize":{{.PageSize}} ,"query":[{"label":"my-labe-{{ .Extra.garbage }},"select":true,"primary":true,"provider":"my-provider","includes":[]}'
 stop_when:
-  - 'select(.Body | contains(": 100 ,")) | .'
+  - 'select(.body_object.body | contains(": 10 ,")) | .'
