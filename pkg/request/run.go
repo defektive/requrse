@@ -162,7 +162,7 @@ func (tr *TemplateRequest) ShouldContinue(body []byte) bool {
 }
 
 func (tr *TemplateRequest) Recurse(c *RequestContext, handleResponse func(body []byte)) {
-	for reqCount := 0; false; reqCount++ {
+	for reqCount := 0; true; reqCount++ {
 		c.Page = reqCount - 1
 		c.Iteration = reqCount
 		c.PageSize = 50
