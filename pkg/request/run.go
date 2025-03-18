@@ -246,8 +246,12 @@ func FromFile(filename string) (*TemplateRequest, error) {
 		return nil, err
 	}
 
+	return FromBytes(f)
+}
+
+func FromBytes(fileByes []byte) (*TemplateRequest, error) {
 	var request *TemplateRequest
-	err = yaml.Unmarshal(f, &request)
+	err := yaml.Unmarshal(fileByes, &request)
 	if err != nil {
 		return nil, err
 	}
