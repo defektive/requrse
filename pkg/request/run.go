@@ -86,12 +86,13 @@ func (tr *TemplateRequest) URLTemplate() *template.Template {
 }
 
 type RequestContext struct {
-	Host      string
-	Iteration int
-	Page      int
-	PageSize  int
-	AuthToken string
-	Extra     map[string]interface{}
+	Host         string
+	Iteration    int
+	Page         int
+	PageSize     int
+	ResultOffset int
+	AuthToken    string
+	Extra        map[string]interface{}
 }
 
 func (tr *TemplateRequest) NewRequest(c *RequestContext) (*http.Request, error) {
@@ -211,9 +212,9 @@ type SimpleResponse struct {
 
 func (tr *TemplateRequest) Recurse(c *RequestContext, handleResponse func(body []byte)) {
 	for reqCount := 0; true; reqCount++ {
-		c.Page = reqCount + 1
 		c.Iteration = reqCount
-		c.PageSize = 50
+		c.Page = reqCount + 1
+		c.ResultOffset = c.PageSize * reqCount
 
 		req, err := tr.NewRequest(c)
 		if err != nil {
