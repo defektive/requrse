@@ -181,8 +181,6 @@ func (tr *TemplateRequest) ShouldContinue(resp *http.Response, body []byte) bool
 				if err, ok := err.(*gojq.HaltError); ok && err.Value() == nil {
 					break
 				}
-
-				log.Println(err)
 			}
 
 			if v != nil {
