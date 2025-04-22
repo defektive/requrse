@@ -1,32 +1,13 @@
-/*
-Copyright © 2025 defektive
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
 package cmd
 
 import (
+	"fmt"
 	"github.com/defektive/requrse/pkg/request"
 	"github.com/spf13/cobra"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -37,22 +18,49 @@ var rootCmd = &cobra.Command{
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
-		example := filepath.Join("pkg", "var", "example-post.yaml")
-		req, err := request.FromFile(example)
+		host, _ := cmd.Flags().GetString("host")
+		auth, _ := cmd.Flags().GetString("auth")
+		template, _ := cmd.Flags().GetString("template")
+		outputDir, _ := cmd.Flags().GetString("out")
+		ext, _ := cmd.Flags().GetString("ext")
+		extra, _ := cmd.Flags().GetStringSlice("extra")
+
+		req, err := request.FromFile(template)
 		if err != nil {
 			panic(err)
 		}
 
-		c := &request.RequestContext{
-			Host:      "localhost",
-			AuthToken: "pizza",
-			Extra: map[string]interface{}{
-				"garbage": 10,
-			},
+		extraData := map[string]interface{}{}
+
+		for _, value := range extra {
+			i := strings.Index(value, "=")
+			extraData[value[:i]] = value[i+1:]
 		}
 
+		c := &request.RequestContext{
+			Host:      host,
+			AuthToken: auth,
+			Extra:     extraData,
+		}
+
+		if outputDir != "" {
+			err = os.MkdirAll(outputDir, 0755)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		iteration := 0
 		req.Recurse(c, func(body []byte) {
-			log.Println("RESPONSE", string(body))
+			if outputDir != "" {
+				err := os.WriteFile(filepath.Join(outputDir, fmt.Sprintf("response-%d.%s", iteration, ext)), body, 0644)
+				if err != nil {
+					log.Println(err)
+				}
+			} else {
+				fmt.Println(string(body))
+			}
+			iteration++
 		})
 
 	},
@@ -68,5 +76,10 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.Flags().StringP("template", "t", "", "Template to process")
+	rootCmd.Flags().StringP("host", "H", "localhost", "http host")
+	rootCmd.Flags().StringP("auth", "a", "", "auth token")
+	rootCmd.Flags().StringP("out", "o", "", "output dir")
+	rootCmd.Flags().String("ext", "json", "extension dir")
+	rootCmd.Flags().StringSliceP("extra", "e", []string{}, "extra data (-e something=someval)")
 }
