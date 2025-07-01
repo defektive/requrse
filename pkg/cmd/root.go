@@ -24,6 +24,8 @@ var rootCmd = &cobra.Command{
 		outputDir, _ := cmd.Flags().GetString("out")
 		ext, _ := cmd.Flags().GetString("ext")
 		extra, _ := cmd.Flags().GetStringSlice("extra")
+		lists, _ := cmd.Flags().GetStringSlice("list")
+		mode, _ := cmd.Flags().GetString("mode")
 
 		req, err := request.FromFile(template)
 		if err != nil {
@@ -50,6 +52,19 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
+		if len(lists) > 0 {
+			if mode == "pitchfork" {
+				for _, list := range lists {
+					fileBytes, err := os.ReadFile(filepath.Join(list))
+					if err != nil {
+						panic(err)
+					}
+					req.Lists = append(req.Lists, strings.Split(string(fileBytes), "\n"))
+				}
+			}
+
+		}
+
 		iteration := 0
 		req.Recurse(c, func(body []byte) {
 			if outputDir != "" {
@@ -62,7 +77,6 @@ var rootCmd = &cobra.Command{
 			}
 			iteration++
 		})
-
 	},
 }
 
@@ -76,10 +90,14 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringP("template", "t", "", "Template to process")
-	rootCmd.Flags().StringP("host", "H", "localhost", "http host")
-	rootCmd.Flags().StringP("auth", "a", "", "auth token")
-	rootCmd.Flags().StringP("out", "o", "", "output dir")
-	rootCmd.Flags().String("ext", "json", "extension dir")
-	rootCmd.Flags().StringSliceP("extra", "e", []string{}, "extra data (-e something=someval)")
+	rootCmd.PersistentFlags().StringP("template", "t", "", "Template to process")
+	rootCmd.PersistentFlags().StringP("host", "H", "localhost", "http host")
+	rootCmd.PersistentFlags().StringP("auth", "a", "", "auth token")
+	rootCmd.PersistentFlags().StringP("out", "o", "", "output directory")
+	rootCmd.PersistentFlags().String("ext", "json", "extension for files in output directory")
+	rootCmd.PersistentFlags().StringSliceP("extra", "e", []string{}, "extra data (-e something=someval)")
+	rootCmd.PersistentFlags().StringSliceP("list", "l", []string{}, "list files (-l wordlist-01 -l wordlist-02)")
+
+	rootCmd.PersistentFlags().StringP("mode", "m", "", "Mode for list usage. Currently only Pitchfork")
+
 }

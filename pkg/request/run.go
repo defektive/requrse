@@ -3,10 +3,12 @@ package request
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"github.com/itchyny/gojq"
 	"gopkg.in/yaml.v3"
-	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -28,6 +30,7 @@ type TemplateRequest struct {
 	Body     string            `yaml:"body"`
 	Method   string            `yaml:"method"`
 	StopWhen []string          `yaml:"stop_when"`
+	Lists    [][]string        `yaml:"lists"`
 
 	headerTemplates map[string]*HeaderTemplate
 	bodyTemplate    *template.Template
@@ -93,9 +96,10 @@ type RequestContext struct {
 	ResultOffset int
 	AuthToken    string
 	Extra        map[string]interface{}
+	ListParams   []string
 }
 
-func (tr *TemplateRequest) NewRequest(c *RequestContext) (*http.Request, error) {
+func (tr *TemplateRequest) Send(c *RequestContext) ([]byte, bool, error) {
 
 	var bodyBytes bytes.Buffer
 	tr.BodyTemplate().Execute(&bodyBytes, c)
@@ -103,10 +107,9 @@ func (tr *TemplateRequest) NewRequest(c *RequestContext) (*http.Request, error) 
 	var urlBytes bytes.Buffer
 	tr.URLTemplate().Execute(&urlBytes, c)
 
-	req, err := http.NewRequest(tr.Method, urlBytes.String(), &bodyBytes)
-	if err != nil {
-		return nil, err
-	}
+	requestURL := urlBytes.String()
+
+	httpHeader := http.Header{}
 
 	for _, headerTpl := range tr.HeaderTemplates() {
 		var hdrBytes bytes.Buffer
@@ -120,13 +123,58 @@ func (tr *TemplateRequest) NewRequest(c *RequestContext) (*http.Request, error) 
 			panic(err)
 		}
 
-		req.Header.Set(hdrBytes.String(), valBytes.String())
+		httpHeader.Set(hdrBytes.String(), valBytes.String())
 	}
 
-	return req, nil
+	if strings.HasPrefix(requestURL, "http") {
+		// we are working HTTP
+
+		req, err := http.NewRequest(tr.Method, requestURL, &bodyBytes)
+		if err != nil {
+			return nil, false, err
+		}
+		req.Header = httpHeader
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, false, err
+		}
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, false, err
+		}
+		shouldContinue := tr.ShouldContinueHTTP(resp, body)
+		return body, shouldContinue, nil
+	} else if strings.HasPrefix(requestURL, "ws:") {
+		// we are working with websockets!!
+		//parsedProxy, err := url.Parse("http://127.0.0.1:8080")
+		//websocket.DefaultDialer.Proxy = http.ProxyURL(parsedProxy)
+
+		ws, _, err := websocket.DefaultDialer.Dial(requestURL, httpHeader)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if err := ws.WriteMessage(websocket.TextMessage, bodyBytes.Bytes()); err != nil {
+			return nil, false, err
+		}
+		if err := ws.WriteMessage(websocket.TextMessage, []byte("\r\n")); err != nil {
+			return nil, false, err
+		}
+
+		if _, msg, err := ws.ReadMessage(); err != nil {
+			log.Fatal(err)
+		} else {
+			shouldContinue := tr.ShouldContinueWS(msg)
+			return msg, shouldContinue, nil
+		}
+	}
+
+	return nil, false, errors.New("invalid request")
 }
 
-func (tr *TemplateRequest) ShouldContinue(resp *http.Response, body []byte) bool {
+func (tr *TemplateRequest) ShouldContinueHTTP(resp *http.Response, body []byte) bool {
 	if tr.StopWhen == nil || len(tr.StopWhen) == 0 {
 		// no conditions. do not continue
 		return false
@@ -141,6 +189,66 @@ func (tr *TemplateRequest) ShouldContinue(resp *http.Response, body []byte) bool
 		RawBody:     string(body),
 		ContentType: resp.Header.Get("Content-Type"),
 		Headers:     resp.Header,
+	}
+
+	maybe := map[string]any{}
+	json.Unmarshal(body, &maybe)
+
+	maybeNot := []map[string]any{}
+	json.Unmarshal(body, &maybeNot)
+
+	sr.BodyObject = maybe
+	sr.BodyArray = maybeNot
+
+	jsonM, err := json.Marshal(sr)
+	if err != nil {
+		log.Println("error marshalling json of simple request", err)
+		panic(err)
+	}
+	r := map[string]any{}
+	err = json.Unmarshal(jsonM, &r)
+	if err != nil {
+		log.Println("error unmarshalling json of simple request", err)
+		panic(err)
+	}
+
+	for _, condition := range tr.StopWhen {
+		query, err := gojq.Parse(condition)
+		if err != nil {
+			log.Println(err)
+			panic(err)
+		}
+
+		iter := query.Run(r)
+		for {
+			v, ok := iter.Next()
+			if !ok {
+				break
+			}
+			if err, ok := v.(error); ok {
+				if err, ok := err.(*gojq.HaltError); ok && err.Value() == nil {
+					break
+				}
+			}
+
+			if v != nil {
+				return false
+			}
+		}
+	}
+
+	// no matches, continue
+	return true
+}
+
+func (tr *TemplateRequest) ShouldContinueWS(body []byte) bool {
+	if tr.StopWhen == nil || len(tr.StopWhen) == 0 {
+		// no conditions. do not continue
+		return false
+	}
+
+	sr := SimpleResponse{
+		RawBody: string(body),
 	}
 
 	maybe := map[string]any{}
@@ -214,25 +322,25 @@ func (tr *TemplateRequest) Recurse(c *RequestContext, handleResponse func(body [
 		c.Page = reqCount + 1
 		c.ResultOffset = c.PageSize * reqCount
 
-		req, err := tr.NewRequest(c)
-		if err != nil {
-			panic(err)
+		if len(tr.Lists) > 0 {
+			c.ListParams = []string{}
+			for _, list := range tr.Lists {
+				if val := list[reqCount]; val != "" {
+					c.ListParams = append(c.ListParams, val)
+				} else {
+					log.Printf("list[%d] is empty", reqCount)
+				}
+			}
 		}
 
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			panic(err)
-		}
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		body, shouldContinue, err := tr.Send(c)
 		if err != nil {
 			panic(err)
 		}
 
 		handleResponse(body)
 
-		if !tr.ShouldContinue(resp, body) {
+		if !shouldContinue {
 			return
 		}
 	}

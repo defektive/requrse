@@ -1,0 +1,8 @@
+name: WebSocket Example
+url: ws://{{ .Host }}/ws
+body: '{"action":"login","user":"{{ index .ListParams 0 }}","pass":"{{ index .ListParams 1 }}"}'
+headers:
+  origin: http://{{ .Host }}
+  Sec-WebSocket-Protocol: control
+stop_when:
+  - 'select(.body_object.resp | contains("ok")) | .'
