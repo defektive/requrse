@@ -24,17 +24,20 @@ type HeaderTemplate struct {
 }
 
 type TemplateRequest struct {
-	Name     string            `yaml:"name"`
-	URL      string            `yaml:"url"`
-	Headers  map[string]string `yaml:"headers"`
-	Body     string            `yaml:"body"`
-	Method   string            `yaml:"method"`
-	StopWhen []string          `yaml:"stop_when"`
-	Lists    [][]string        `yaml:"lists"`
+	Name      string            `yaml:"name"`
+	URL       string            `yaml:"url"`
+	Headers   map[string]string `yaml:"headers"`
+	SetupBody string            `yaml:"setup_body"`
+	Body      string            `yaml:"body"`
+	Method    string            `yaml:"method"`
+	StopWhen  []string          `yaml:"stop_when"`
+	Lists     [][]string        `yaml:"lists"`
 
 	headerTemplates map[string]*HeaderTemplate
 	bodyTemplate    *template.Template
 	urlTemplate     *template.Template
+
+	webSocket *websocket.Conn
 }
 
 func CreateTemplate(name, t string) *template.Template {
@@ -69,7 +72,6 @@ func (tr *TemplateRequest) HeaderTemplates() map[string]*HeaderTemplate {
 	}
 
 	return tr.headerTemplates
-
 }
 
 func (tr *TemplateRequest) BodyTemplate() *template.Template {
@@ -150,16 +152,22 @@ func (tr *TemplateRequest) Send(c *RequestContext) ([]byte, bool, error) {
 		// we are working with websockets!!
 		//parsedProxy, err := url.Parse("http://127.0.0.1:8080")
 		//websocket.DefaultDialer.Proxy = http.ProxyURL(parsedProxy)
+		ws := tr.getWS(requestURL, httpHeader)
 
-		ws, _, err := websocket.DefaultDialer.Dial(requestURL, httpHeader)
-		if err != nil {
-			return nil, false, err
+		if c.Iteration == 0 && tr.SetupBody != "" {
+			// hack to test if this could be useful
+			if err := ws.WriteMessage(websocket.TextMessage, []byte(tr.SetupBody)); err != nil {
+				return nil, false, err
+			}
+
+			if _, msg, err := ws.ReadMessage(); err != nil {
+				log.Fatal(err)
+			} else {
+				log.Println(string(msg))
+			}
 		}
 
 		if err := ws.WriteMessage(websocket.TextMessage, bodyBytes.Bytes()); err != nil {
-			return nil, false, err
-		}
-		if err := ws.WriteMessage(websocket.TextMessage, []byte("\r\n")); err != nil {
 			return nil, false, err
 		}
 
@@ -172,6 +180,17 @@ func (tr *TemplateRequest) Send(c *RequestContext) ([]byte, bool, error) {
 	}
 
 	return nil, false, errors.New("invalid request")
+}
+
+func (tr *TemplateRequest) getWS(requestURL string, httpHeader http.Header) *websocket.Conn {
+	if tr.webSocket == nil {
+		ws, _, err := websocket.DefaultDialer.Dial(requestURL, httpHeader)
+		if err != nil {
+			panic(err)
+		}
+		tr.webSocket = ws
+	}
+	return tr.webSocket
 }
 
 func (tr *TemplateRequest) ShouldContinueHTTP(resp *http.Response, body []byte) bool {
