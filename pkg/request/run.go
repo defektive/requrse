@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
-	"github.com/itchyny/gojq"
-	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -16,6 +13,10 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"github.com/gorilla/websocket"
+	"github.com/itchyny/gojq"
+	"gopkg.in/yaml.v3"
 )
 
 type HeaderTemplate struct {
@@ -36,6 +37,8 @@ type TemplateRequest struct {
 	headerTemplates map[string]*HeaderTemplate
 	bodyTemplate    *template.Template
 	urlTemplate     *template.Template
+
+	LastResponse SimpleResponse
 
 	webSocket *websocket.Conn
 }
@@ -99,6 +102,7 @@ type RequestContext struct {
 	AuthToken    string
 	Extra        map[string]interface{}
 	ListParams   []string
+	LastResponse *SimpleResponse
 }
 
 func (tr *TemplateRequest) Send(c *RequestContext) ([]byte, bool, error) {
@@ -110,7 +114,6 @@ func (tr *TemplateRequest) Send(c *RequestContext) ([]byte, bool, error) {
 	tr.URLTemplate().Execute(&urlBytes, c)
 
 	requestURL := urlBytes.String()
-
 	httpHeader := http.Header{}
 
 	for _, headerTpl := range tr.HeaderTemplates() {
@@ -146,6 +149,7 @@ func (tr *TemplateRequest) Send(c *RequestContext) ([]byte, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
+
 		shouldContinue := tr.ShouldContinueHTTP(resp, body)
 		return body, shouldContinue, nil
 	} else if strings.HasPrefix(requestURL, "ws:") {
@@ -230,6 +234,8 @@ func (tr *TemplateRequest) ShouldContinueHTTP(resp *http.Response, body []byte) 
 		log.Println("error unmarshalling json of simple request", err)
 		panic(err)
 	}
+
+	tr.LastResponse = sr
 
 	for _, condition := range tr.StopWhen {
 		query, err := gojq.Parse(condition)
@@ -340,6 +346,7 @@ func (tr *TemplateRequest) Recurse(c *RequestContext, handleResponse func(body [
 		c.Iteration = reqCount
 		c.Page = reqCount + 1
 		c.ResultOffset = c.PageSize * reqCount
+		c.LastResponse = &tr.LastResponse
 
 		if len(tr.Lists) > 0 {
 			c.ListParams = []string{}

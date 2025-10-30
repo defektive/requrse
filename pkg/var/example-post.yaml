@@ -1,9 +1,9 @@
 name: Xodbox POST Example
-url: http://{{ .Host }}/l/api/v1/inspect.json
+url: http://{{ .Host }}/l/api/v1/inspect.json?ssp={{.LastResponse.BodyObject.remote_addr}}
 method: POST
 headers:
   authorization: Token {{ .AuthToken }}
   content-type: text/json
-body: '{"version":"v1","page": {{.Page}} ,"pageSize":{{.PageSize}} ,"query":[{"label":"my-labe-{{ .Extra.garbage }},"select":true,"primary":true,"provider":"my-provider","includes":[]}'
+body: '{"version":"v1","page": {{.Page}} ,"pageSize":{{.PageSize}} ,"pizza":[{"label":"my-labe-{{ .Extra.garbage }},"select":true,"primary":true,"provider":"my-provider","includes":[]}'
 stop_when:
   - 'select(.body_object.body | contains(": 10 ,")) | .'

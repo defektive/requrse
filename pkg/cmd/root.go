@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/defektive/requrse/pkg/request"
-	"github.com/spf13/cobra"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/defektive/requrse/pkg/request"
+	"github.com/spf13/cobra"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -62,7 +63,6 @@ var rootCmd = &cobra.Command{
 					req.Lists = append(req.Lists, strings.Split(string(fileBytes), "\n"))
 				}
 			}
-
 		}
 
 		iteration := 0
@@ -73,7 +73,7 @@ var rootCmd = &cobra.Command{
 					log.Println(err)
 				}
 			} else {
-				fmt.Println(string(body))
+				log.Println(string(body))
 			}
 			iteration++
 		})
