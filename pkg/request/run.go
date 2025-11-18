@@ -2,10 +2,11 @@ package request
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -41,6 +42,8 @@ type TemplateRequest struct {
 	LastResponse SimpleResponse
 
 	webSocket *websocket.Conn
+
+	proxyURL *url.URL
 }
 
 func CreateTemplate(name, t string) *template.Template {
@@ -56,6 +59,16 @@ func (tr *TemplateRequest) getTemplatePrefix() string {
 func (tr *TemplateRequest) getHeaderTplKey(header string, index int) string {
 	normalizedHeader := sanitizeRegExp.ReplaceAllString(strings.ToLower(header), "")
 	return fmt.Sprintf("%s_header_%d_%s", tr.getTemplatePrefix(), index, normalizedHeader)
+}
+
+func (tr *TemplateRequest) SetProxy(proxyString string) error {
+	parsed, err := url.Parse(proxyString)
+	if err != nil {
+		return err
+	}
+	tr.proxyURL = parsed
+
+	return nil
 }
 
 func (tr *TemplateRequest) HeaderTemplates() map[string]*HeaderTemplate {
@@ -140,12 +153,26 @@ func (tr *TemplateRequest) Send(c *RequestContext) ([]byte, bool, error) {
 		}
 		req.Header = httpHeader
 		client := &http.Client{}
+
+		if tr.proxyURL != nil {
+			tlsConfig := &tls.Config{
+				InsecureSkipVerify: true, // This disables certificate verification
+			}
+
+			proxy := http.ProxyURL(tr.proxyURL)
+			transport := &http.Transport{
+				Proxy:           proxy,
+				TLSClientConfig: tlsConfig,
+			}
+			client.Transport = transport
+		}
+
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, false, err
 		}
 		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, false, err
 		}

@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var debug = false
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "requrse",
@@ -27,10 +29,21 @@ var rootCmd = &cobra.Command{
 		extra, _ := cmd.Flags().GetStringSlice("extra")
 		lists, _ := cmd.Flags().GetStringSlice("list")
 		mode, _ := cmd.Flags().GetString("mode")
+		proxy, _ := cmd.Flags().GetString("proxy")
 
 		req, err := request.FromFile(template)
 		if err != nil {
 			panic(err)
+		}
+
+		if proxy != "" {
+			err = req.SetProxy(proxy)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if debug {
+				log.Printf("Proxy: %s", proxy)
+			}
 		}
 
 		extraData := map[string]interface{}{}
@@ -67,13 +80,16 @@ var rootCmd = &cobra.Command{
 
 		iteration := 0
 		req.Recurse(c, func(body []byte) {
+			if debug {
+				log.Println("handle response", string(body))
+			}
 			if outputDir != "" {
 				err := os.WriteFile(filepath.Join(outputDir, fmt.Sprintf("response-%d.%s", iteration, ext)), body, 0644)
 				if err != nil {
 					log.Println(err)
 				}
 			} else {
-				log.Println(string(body))
+				fmt.Println(string(body))
 			}
 			iteration++
 		})
@@ -92,6 +108,7 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", debug, "debug mode")
 	rootCmd.PersistentFlags().StringP("template", "t", "", "Template to process")
 	rootCmd.PersistentFlags().StringP("host", "H", "localhost", "http host")
 	rootCmd.PersistentFlags().StringP("auth", "a", "", "auth token")
@@ -101,5 +118,6 @@ func init() {
 	rootCmd.PersistentFlags().StringSliceP("list", "l", []string{}, "list files (-l wordlist-01 -l wordlist-02)")
 
 	rootCmd.PersistentFlags().StringP("mode", "m", "", "Mode for list usage. Currently only Pitchfork")
+	rootCmd.PersistentFlags().StringP("proxy", "p", "", "proxy to use")
 
 }
