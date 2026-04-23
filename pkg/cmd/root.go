@@ -98,6 +98,8 @@ var rootCmd = &cobra.Command{
 				jsonBytes := []byte(string(body))
 				json.Unmarshal(jsonBytes, &r)
 
+				resultBytes := []byte{}
+
 				iter := query.Run(r)
 				for {
 					v, ok := iter.Next()
@@ -113,12 +115,12 @@ var rootCmd = &cobra.Command{
 					}
 
 					if v != nil {
-						jsonBytes, _ = json.Marshal(v)
+						resultBytes, _ = json.Marshal(v)
 						break
 					}
 				}
 
-				body = jsonBytes
+				body = resultBytes
 			}
 
 			if outputDir != "" {
