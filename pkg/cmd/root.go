@@ -129,7 +129,9 @@ var rootCmd = &cobra.Command{
 					log.Println(err)
 				}
 			} else {
-				fmt.Println(string(body))
+				if len(body) > 0 {
+					fmt.Println(string(body))
+				}
 			}
 			iteration++
 		})
