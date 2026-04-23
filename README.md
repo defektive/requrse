@@ -12,50 +12,7 @@ Send HTTP requests until specific conditions are met.
 - **Authentication**: Token-based auth support
 - **Output Control**: Save responses to files or print to stdout
 - **Debug Mode**: Enable detailed logging
-
-## Installation
-
-```bash
-go install github.com/defektive/requrse@latest
-```
-
-## Usage
-
-### Basic GET Request
-
-```bash
-requrse -t example-get.yaml -H localhost -a YOUR_TOKEN
-```
-
-### POST Request
-
-```bash
-requrse -t example-post.yaml -H localhost -a YOUR_TOKEN -e label=my-label
-```
-
-### WebSocket
-
-```bash
-requrse -t example-ws.yaml -H localhost -l list1.txt -l list2.txt
-```
-
-### With Output Directory
-
-```bash
-requrse -t example-get.yaml -H localhost -o /path/to/output -ext json
-```
-
-### With Proxy
-
-```bash
-requrse -t example-get.yaml -H localhost -p http://proxy:8080
-```
-
-### Debug Mode
-
-```bash
-requrse -t example-get.yaml -H localhost -d
-```
+- **jq Filter**: Apply jq transformations to JSON output
 
 ## Flags
 
@@ -66,11 +23,13 @@ requrse -t example-get.yaml -H localhost -d
 | `--auth` | `-a` | Authentication token |
 | `--out` | `-o` | Output directory |
 | `--ext` | `-e` | File extension (default: json) |
-| `--extra` | -e | Extra data pairs (key=value) |
+| `--extra` | `-e` | Extra data pairs (key=value) |
 | `--list` | `-l` | List files for enumeration |
 | `--mode` | `-m` | List mode (pitchfork) |
 | `--proxy` | `-p` | Proxy to use |
 | `--debug` | `-d` | Debug mode |
+| `--jq` | `-j` | jq filter to apply to JSON output |
+
 
 ## Template Format
 
@@ -116,6 +75,21 @@ Run:
 ```bash
 requrse -t paginated.yaml -H api.example.com -a $TOKEN -o results -ext json
 ```
+
+### With jq Filter
+
+Apply transformations to JSON output before displaying or saving:
+
+```bash
+requrse -t paginated.yaml -H api.example.com -j '.data.items | .[0]'
+```
+
+This extracts just the first item from the response. More complex filters:
+
+```bash
+requrse -t paginated.yaml -H api.example.com -j '[.data.items[] | select(.active == true)]'
+```
+
 
 ### WebSocket Login Brute-Force
 

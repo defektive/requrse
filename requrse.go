@@ -28,3 +28,33 @@ import (
 func main() {
 	cmd.Execute()
 }
+
+//func main() {
+//	// 1. Raw JSON string input (e.g., from an API)
+//	inputStr := `{"foo": "bar", "data": "{\"inner\":\"value\"}"}`
+//	var rawInput interface{}
+//	json.Unmarshal([]byte(inputStr), &rawInput)
+//
+//	// 2. Compile query
+//	query, err := gojq.Parse(".data | fromjson")
+//	if err != nil {
+//		log.Fatalln(err)
+//	}
+//	code, err := gojq.Compile(query)
+//	if err != nil {
+//		log.Fatalln(err)
+//	}
+//
+//	// 3. Run against Go object
+//	iter := code.Run(rawInput)
+//	for {
+//		v, ok := iter.Next()
+//		if !ok {
+//			break
+//		}
+//		if err, ok := v.(error); ok {
+//			log.Fatalln(err)
+//		}
+//		fmt.Printf("%+v\n", v) // Output: map[inner:value]
+//	}
+//}

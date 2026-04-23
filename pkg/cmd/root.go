@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/defektive/requrse/pkg/request"
+	"github.com/itchyny/gojq"
 	"github.com/spf13/cobra"
 )
 
@@ -83,6 +85,42 @@ var rootCmd = &cobra.Command{
 			if debug {
 				log.Println("handle response", string(body))
 			}
+
+			filter, _ := cmd.Flags().GetString("jq")
+			if filter != "" {
+				query, err := gojq.Parse(filter)
+				if err != nil {
+					log.Println(err)
+					panic(err)
+				}
+
+				r := map[string]any{}
+				jsonBytes := []byte(string(body))
+				json.Unmarshal(jsonBytes, &r)
+
+				iter := query.Run(r)
+				for {
+					v, ok := iter.Next()
+					if !ok {
+						break
+					}
+					if err, ok := v.(error); ok {
+						if err, ok := err.(*gojq.HaltError); ok && err.Value() == nil {
+							break
+						}
+						log.Println(err)
+						panic(err)
+					}
+
+					if v != nil {
+						jsonBytes, _ = json.Marshal(v)
+						break
+					}
+				}
+
+				body = jsonBytes
+			}
+
 			if outputDir != "" {
 				err := os.WriteFile(filepath.Join(outputDir, fmt.Sprintf("response-%d.%s", iteration, ext)), body, 0644)
 				if err != nil {
@@ -119,5 +157,6 @@ func init() {
 
 	rootCmd.PersistentFlags().StringP("mode", "m", "", "Mode for list usage. Currently only Pitchfork")
 	rootCmd.PersistentFlags().StringP("proxy", "p", "", "proxy to use")
+	rootCmd.PersistentFlags().String("jq", "", "jq filter to apply to JSON output")
 
 }
